@@ -41,7 +41,7 @@ optional arguments:
 
 As an example, the command line
 
-python3 load-test.py  --processes 3 --queries 5 --updates 3 --verbose True --uri "mongodb://user:P4ssw0rd@narval:27017,narval:27018,narval:27019/admin?replicaSet=rs1"
+_python3 load-test.py  --processes 3 --queries 5 --updates 3 --verbose True --uri "mongodb://user:P4ssw0rd@narval:27017,narval:27018,narval:27019/admin?replicaSet=rs1"_
 
 will start three processes that connect to the replica set _rs1_ running on the host Narval:27017, Narval:27018, and Narval:27019. It will authenticate as user/P4ssw0rd.
 
