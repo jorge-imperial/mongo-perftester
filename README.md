@@ -1,4 +1,4 @@
-# mongo-loadtester
+# mongo-perftester
 A python script to create workload on a MongoDB database.
 
 
