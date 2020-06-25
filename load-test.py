@@ -4,35 +4,36 @@ from datetime import timedelta, datetime
 from multiprocessing import Pool
 from random import randint
 from time import sleep
+import json
 
 import pymongo
 
 
-def run_queries(n, client):
+def run_queries(n, client, db, coll, query):
     # This is a sample query. You can write your own!
-    age = randint(18, 65)
-    collection = client.test['onemill']
-    collection.find({'age': age})
+    c = client[db][coll]
+    c.find(query)
     # Any relevant debug output can be written to the logs.
     #logging.debug('Proc{} query'.format(n))
 
 
-def run_updates(n, client):
-    age = randint(18, 65)
-    collection = client.test['onemill']
-    collection.update_one({'age': age}, {'$set': {'m': randint(0, 1000)}})
+def run_updates(n, client, db, coll, update):
+    c = client[db][coll]
+    c.update(update)
     #logging.debug('Proc{} update'.format(n))
 
 
-def run_deletes(n):
+def run_deletes(n, client, db, coll, delete):
     logging.debug('Proc{} delete'.format(n))
 
 
-def run_inserts(n):
+def run_inserts(n, client, db, coll, insert):
+    c = client[db][coll]
+    c.update(insert)
     logging.debug('Proc{} insert'.format(n))
 
 
-def run_aggregations(n):
+def run_aggregations(n, client, db, coll, agg):
     logging.debug('Proc{0} aggregation'.format(n))
 
 
@@ -46,6 +47,25 @@ max_ins = 0
 max_agr = 0
 max_del = 0
 seconds_to_run = 0
+
+query_doc = None
+query_coll = None
+query_db = None
+update_doc = None
+update_coll = None
+update_db = None
+
+delete_doc = None
+delete_coll = None
+delete_db = None
+
+insert_doc = None
+insert_coll = None
+insert_db = None
+
+aggregation_pipe = None
+aggregation_coll = None
+aggregation_db = None
 
 
 def millis_interval(start, end):
@@ -80,11 +100,18 @@ def test_db(proc_number):
         # Initially we support queries, updates, deletes, inserts and aggregations,
         # but we could extend this to other commands.
         operations = [
-            {'name': 'query', 'counter': 0, 'max': max_qry, 'run': run_queries},
-            {'name': 'update', 'counter': 0, 'max': max_upd, 'run': run_updates},
-            {'name': 'delete', 'counter': 0, 'max': max_del, 'run': run_deletes},
-            {'name': 'insert', 'counter': 0, 'max': max_ins, 'run': run_inserts},
-            {'name': 'aggregate', 'counter': 0, 'max': max_agr, 'run': run_aggregations}]
+            {'name': 'query', 'counter': 0, 'max': max_qry, 'run': run_queries,
+             'db': query_db, 'coll': query_coll, 'op': query_doc},
+            {'name': 'update', 'counter': 0, 'max': max_upd, 'run': run_updates,
+             'db': update_db, 'coll': update_coll, 'op': update_doc},
+            {'name': 'delete', 'counter': 0, 'max': max_del, 'run': run_deletes,
+             'db': delete_db, 'coll': delete_coll, 'op': delete_doc},
+            {'name': 'insert', 'counter': 0, 'max': max_ins, 'run': run_inserts,
+             'db': insert_db, 'coll': insert_coll, 'op': insert_doc},
+            {'name': 'aggregate', 'counter': 0, 'max': max_agr, 'run': run_aggregations,
+             'db': aggregation_db, 'coll': aggregation_coll, 'op': aggregation_pipe}
+        ]
+
         logging.debug('Process {} will run {} operations per second'.format(proc_number, ops_left))
 
         # start operations this period
@@ -98,7 +125,7 @@ def test_db(proc_number):
                 continue  # next op
 
             # execute
-            op['run'](proc_number, client)
+            op['run'](proc_number, client, op['db'], op['coll'], op['op'])
             op['counter'] += 1
 
             # count ops left
@@ -138,22 +165,48 @@ def print_results(results, n_threads):
     ))
 
 
-def perf_test(uri, n_threads, seconds,  q, u, i, a, d):
+def perf_test(arguments):
     global max_qry, max_upd, max_ins, max_agr, max_del
     global mongo_uri
     global seconds_to_run
+    global query_doc, query_coll, query_db
+    global update_filter, update_doc, update_coll, update_db
+    global delete_doc, delete_coll, delete_db
+    global insert_doc, insert_coll, insert_db
+    global aggregation_pipe, aggregation_coll, aggregation_db
 
-    # globals here.
-    max_qry = q
-    max_upd = u
-    max_ins = i
-    max_agr = a
-    max_del = d
-    mongo_uri = uri
-    seconds_to_run = seconds
+    mongo_uri = arguments['uri']
+    seconds_to_run = arguments['seconds']
+    n_threads = arguments['processes']
+    max_agr = arguments['aggregations']
+    max_del = arguments['deletes']
+    max_ins = arguments['inserts']
+    max_upd = arguments['updates']
+    max_qry = arguments['queries']
+
+    try:
+        query_doc = json.loads(arguments['query_doc'])
+        query_coll = arguments['query_coll']
+        query_db = arguments['query_db']
+
+        update_doc = json.loads(arguments['update_doc'])
+        update_filter = json.load(arguments['update_filter'])
+        update_coll = arguments['update_coll']
+        update_db = arguments['update_db']
+
+        delete_doc = json.loads(arguments['delete_doc'])
+        delete_coll = arguments['delete_coll']
+        delete_db = arguments['delete_db']
+
+        insert_doc = json.loads(arguments['insert_doc'])
+        insert_coll = arguments['insert_coll']
+        insert_db = arguments['insert_db']
+    except json.JSONDecodeError as e:
+        logging.critical('Error decoding JSON document: ' + e.msg)
+        return
 
     pool = Pool(n_threads)
-    logging.info('Running {} process(es) for {} seconds'.format(n_threads, seconds))
+    logging.info('Running {} process(es) for {} seconds'.format(n_threads, seconds_to_run))
 
     results = pool.map(test_db, range(n_threads))
     pool.close()
@@ -187,6 +240,27 @@ if __name__ == "__main__":
     ap.add_argument('--deletes', required=False,
                     help='Number of delete operations to execute per process', type=int, default=0)
 
+    ap.add_argument('--query_doc', required=False,  help='Query', type=str, default='{}')
+    ap.add_argument('--query_db', required=False,  help='Query database', type=str, default='test')
+    ap.add_argument('--query_coll', required=False, help='Query collection', type=str, default='foo')
+
+    ap.add_argument('--update_filter', required=False, help='Update filter', type=str, default='{}')
+    ap.add_argument('--update_doc', required=False, help='Update document', type=str, default='{}')
+    ap.add_argument('--update_db', required=False, help='Update database', type=str, default='test')
+    ap.add_argument('--update_coll', required=False, help='Update collection', type=str, default='foo')
+
+    ap.add_argument('--insert_doc', required=False, help='Insert doc', type=str, default='{}')
+    ap.add_argument('--insert_db', required=False, help='Insert database', type=str, default='test')
+    ap.add_argument('--insert_coll', required=False, help='Insert collection', type=str, default='foo')
+
+    ap.add_argument('--delete_doc', required=False, help='Delete doc', type=str, default='{}')
+    ap.add_argument('--delete_db', required=False, help='Delete database', type=str, default='test')
+    ap.add_argument('--delete_coll', required=False, help='Delete collection', type=str, default='foo')
+
+    ap.add_argument('--aggregation_doc', required=False, help='Aggregation pipeline', type=str, default='{}')
+    ap.add_argument('--aggregation', required=False, help='Aggregation database', type=str, default='test')
+    ap.add_argument('--aggregation_coll', required=False, help='Aggregation collection', type=str, default='foo')
+
     args = vars(ap.parse_args())
 
     if args['verbose']:
@@ -199,5 +273,4 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(format='%(asctime)s %(message)s', level=log_level)
 
-    perf_test(args['uri'], args['processes'], args['seconds'],
-              args['queries'], args['updates'], args['inserts'], args['aggregations'], args['deletes'])
+    perf_test(args)
