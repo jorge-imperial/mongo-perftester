@@ -18,8 +18,10 @@ def run_queries(n, client, db, coll, query):
 
 
 def run_updates(n, client, db, coll, update):
+    doc = update['doc']
+    select = update['filter']
     c = client[db][coll]
-    c.update(update)
+    c.update(select, doc)
     #logging.debug('Proc{} update'.format(n))
 
 
@@ -51,7 +53,9 @@ seconds_to_run = 0
 query_doc = None
 query_coll = None
 query_db = None
+
 update_doc = None
+update_filter = None
 update_coll = None
 update_db = None
 
@@ -103,7 +107,7 @@ def test_db(proc_number):
             {'name': 'query', 'counter': 0, 'max': max_qry, 'run': run_queries,
              'db': query_db, 'coll': query_coll, 'op': query_doc},
             {'name': 'update', 'counter': 0, 'max': max_upd, 'run': run_updates,
-             'db': update_db, 'coll': update_coll, 'op': update_doc},
+             'db': update_db, 'coll': update_coll, 'op': {'doc': update_doc, 'filter': update_filter}},
             {'name': 'delete', 'counter': 0, 'max': max_del, 'run': run_deletes,
              'db': delete_db, 'coll': delete_coll, 'op': delete_doc},
             {'name': 'insert', 'counter': 0, 'max': max_ins, 'run': run_inserts,
