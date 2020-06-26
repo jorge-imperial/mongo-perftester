@@ -190,7 +190,7 @@ def perf_test(arguments):
         query_db = arguments['query_db']
 
         update_doc = json.loads(arguments['update_doc'])
-        update_filter = json.load(arguments['update_filter'])
+        update_filter = json.loads(arguments['update_filter'])
         update_coll = arguments['update_coll']
         update_db = arguments['update_db']
 
